@@ -1,0 +1,12 @@
+rules:
+  - id: dangerous-native-query
+    pattern: $X.createNativeQuery(...)
+    message: "Native SQL query detected. Use parameterized queries or ORM instead."
+    languages: [java]
+    severity: ERROR
+
+  - id: string-format-html
+    pattern: String.format("=~/<[a-zA-Z].*>/", ...)
+    message: "HTML built with String.format. Use a templating engine with auto-escaping."
+    languages: [java]
+    severity: WARNING
