@@ -1,0 +1,80 @@
+---
+name: pullrequest
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  actions: read
+  security-events: write
+  contents: read
+
+jobs:
+
+  DependenciesAnalysis:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v4
+
+      - name: run osv-scanner after PR
+        uses: google/osv-scanner-action/osv-scanner-action@c51854704019a247608d928f370c98740469d4b5
+        with:
+          scan-args: |-
+            --format json
+            --output DependenciesAnalysisAfter.json
+            ./
+        continue-on-error: true
+
+      - name: checkout baseline commit
+        run: |
+          git checkout ${{ github.event.pull_request.base.sha }}
+
+      - name: run osv-scanner before PR
+        uses: google/osv-scanner-action/osv-scanner-action@c51854704019a247608d928f370c98740469d4b5
+        with:
+          scan-args: |-
+            --format json
+            --output DependenciesAnalysisBefore.json
+            ./
+        continue-on-error: true
+
+      - name: compare results
+        uses: google/osv-scanner-action/osv-reporter-action@c51854704019a247608d928f370c98740469d4b5
+        with:
+          scan-args: |-
+            --output DependenciesAnalysisDiff.sarif
+            --new DependenciesAnalysisAfter.json
+            --old DependenciesAnalysisBefore.json
+        continue-on-error: true
+
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependencies-report
+          path: DependenciesAnalysisDiff.sarif
+
+  SourceCodeAnalysis:
+    runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: run semgrep differential
+        run: |
+          semgrep scan \
+            --config .semgrep \
+            --sarif \
+            --output SourceCodeAnalysisDiff.sarif \
+            --baseline-commit ${{ github.event.pull_request.base.sha }}
+        continue-on-error: true
+
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-code-report
+          path: SourceCodeAnalysisDiff.sarif
